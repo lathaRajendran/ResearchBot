@@ -18,6 +18,7 @@ An intelligent, stateful web research chatbot powered by **LangGraph**, **Tavily
 ├── agent.py          # LangGraph implementation, query generator, search & synthesis logic
 ├── app.py            # Streamlit frontend with stateful chat UI
 ├── test_agent.py     # Unit test cases for verifying conversational routing
+├── eval_runner.py    # LLM-as-judge evaluation suite for agent response quality
 ├── requirements.txt  # Project Python dependencies
 └── .env              # Environment secrets configuration (API keys)
 ```
@@ -62,7 +63,14 @@ python agent.py --query "latest advances in quantum computing"
 
 ## Running Automated Tests
 
+### Unit Tests
 Run the unit tests to verify the conversational routing and graph logic:
 ```bash
 python3 -m unittest test_agent.py
+```
+
+### LLM-as-Judge Evaluation
+Run the automated LLM evaluation suite to grade the quality, structure, and accuracy of agent responses against predefined rubrics:
+```bash
+python3 eval_runner.py
 ```

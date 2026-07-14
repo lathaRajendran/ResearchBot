@@ -29,6 +29,38 @@ class ResearchState(TypedDict):
     report: str
 
 
+def generate_query(state: ResearchState) -> ResearchState:
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+    
+    system_prompt = (
+        "You are an assistant that analyzes a conversation history and determines if a Google search is needed "
+        "to answer the user's latest message.\n\n"
+        "If a search is needed, respond ONLY with an optimized, standalone search query (keywords). Do not add any conversational text.\n"
+        "If NO search is needed (e.g. the message is a greeting like 'hello', a simple follow-up, or general knowledge "
+        "that does not require web search), respond ONLY with the exact string: NO_SEARCH"
+    )
+    
+    messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    response = llm.invoke(messages)
+    
+    query = response.content.strip()
+    return {"query": query}
+
+
+def route_search(state: ResearchState) -> str:
+    if state.get("query", "").strip() == "NO_SEARCH":
+        return "respond_directly"
+    return "search"
+
+
+def respond_directly(state: ResearchState) -> ResearchState:
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+    system_prompt = "You are a helpful, conversational web research assistant. Answer the user's message directly based on the conversation history."
+    messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    response = llm.invoke(messages)
+    return {"report": response.content, "messages": [response]}
+
+
 def search_web(state: ResearchState) -> ResearchState:
     tool = TavilySearch(max_results=5)
     raw_results = tool.invoke(state["query"])
@@ -50,22 +82,39 @@ def synthesize_report(state: ResearchState) -> ResearchState:
         for r in state["search_results"]
     )
 
-    messages = [
-        SystemMessage(content="You are a research analyst. Synthesize the search results into a clear, structured report with: Summary, Key Findings (bullet points), and Sources."),
-        HumanMessage(content=f"Research query: {state['query']}\n\nSearch results:\n{results_text}"),
-    ]
+    system_prompt = (
+        "You are a research analyst. Synthesize the web search results to answer the user's latest query, taking into account the conversation history.\n"
+        "Provide a clear, structured report with: Summary, Key Findings (bullet points), and Sources.\n\n"
+        f"Search Results:\n{results_text}"
+    )
 
+    messages = [SystemMessage(content=system_prompt)] + state["messages"]
     response = llm.invoke(messages)
     return {"report": response.content, "messages": [response]}
 
 
 def build_graph() -> StateGraph:
     graph = StateGraph(ResearchState)
+    graph.add_node("generate_query", generate_query)
     graph.add_node("search", search_web)
     graph.add_node("synthesize", synthesize_report)
-    graph.set_entry_point("search")
+    graph.add_node("respond_directly", respond_directly)
+    
+    graph.set_entry_point("generate_query")
+    
+    graph.add_conditional_edges(
+        "generate_query",
+        route_search,
+        {
+            "search": "search",
+            "respond_directly": "respond_directly"
+        }
+    )
+    
     graph.add_edge("search", "synthesize")
     graph.add_edge("synthesize", END)
+    graph.add_edge("respond_directly", END)
+    
     return graph.compile()
 
 # -----------------------------
@@ -75,15 +124,29 @@ agent = build_graph()
 
 # Public function for Streamlit
 # -----------------------------
-def run_research(query: str) -> str:
+def run_research(messages: list | str) -> str:
     """
     Execute the research workflow and return the report.
     """
+    formatted_messages = []
+    if isinstance(messages, str):
+        formatted_messages = [HumanMessage(content=messages)]
+    else:
+        for msg in messages:
+            if isinstance(msg, dict):
+                role = msg.get("role")
+                content = msg.get("content")
+                if role == "user":
+                    formatted_messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    formatted_messages.append(AIMessage(content=content))
+            else:
+                formatted_messages.append(msg)
 
     result = agent.invoke(
         {
-            "query": query,
-            "messages": [],
+            "query": "",
+            "messages": formatted_messages,
             "search_results": [],
             "report": "",
         }

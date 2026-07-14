@@ -166,7 +166,19 @@ def run_research(messages: list | str) -> str:
     start_time = time.time()
     
     with tracer.start_as_current_span("run_research") as span:
-        logger.info("run_research: Invoked research flow.")
+        # Extract the latest query/message content
+        latest_message = ""
+        if isinstance(messages, str):
+            latest_message = messages
+        elif isinstance(messages, list) and len(messages) > 0:
+            last_msg = messages[-1]
+            if isinstance(last_msg, dict):
+                latest_message = last_msg.get("content", "")
+            else:
+                latest_message = getattr(last_msg, "content", str(last_msg))
+
+        span.set_attribute("latest_message", latest_message)
+        logger.info(f"run_research: Invoked research flow with message: '{latest_message}'")
         
         # Increment metric counter
         query_counter.add(1)
@@ -199,7 +211,7 @@ def run_research(messages: list | str) -> str:
         query_latency.record(duration)
         span.set_attribute("execution_duration_seconds", duration)
         
-        logger.info(f"run_research: Flow executed successfully in {duration:.3f}s.")
+        logger.info(f"run_research: Flow executed successfully in {duration:.3f}s. Report size: {len(result['report'])} chars.")
         return result["report"]
 
 

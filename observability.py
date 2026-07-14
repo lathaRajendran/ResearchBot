@@ -29,13 +29,28 @@ class OTelLogFilter(logging.Filter):
 logger = logging.getLogger("research-bot")
 logger.addFilter(OTelLogFilter())
 
+import os
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
 # 2. Tracing Setup
 trace.set_tracer_provider(TracerProvider())
 tracer = trace.get_tracer("research-bot-tracer")
 
-# Console span exporter for verification
-span_processor = SimpleSpanProcessor(ConsoleSpanExporter())
-trace.get_tracer_provider().add_span_processor(span_processor)
+# Load environment variables to check for Jaeger OTLP config
+jaeger_enabled = os.getenv("JAEGER_ENABLED", "false").lower() == "true"
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces")
+
+if jaeger_enabled:
+    # Use BatchSpanProcessor and OTLPSpanExporter to send spans to Jaeger OTLP collector
+    span_processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
+    trace.get_tracer_provider().add_span_processor(span_processor)
+    # Log information using standard python logger (this will run before logging filter is loaded, so we get basic log)
+    print(f"OpenTelemetry: Sending traces to Jaeger OTLP receiver at {otlp_endpoint}")
+else:
+    # Console span exporter for verification
+    span_processor = SimpleSpanProcessor(ConsoleSpanExporter())
+    trace.get_tracer_provider().add_span_processor(span_processor)
 
 # 3. Metrics Setup
 # Set a low export interval (e.g., 5 seconds) to demonstrate metrics output in local console logs

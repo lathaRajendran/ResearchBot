@@ -6,11 +6,6 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
 
 # 1. Standard Logging Setup (Structured for OTel parity)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] [TraceID: %(otelTraceID)s SpanID: %(otelSpanID)s] %(name)s - %(message)s'
-)
-
 class OTelLogFilter(logging.Filter):
     """
     Injects active OpenTelemetry TraceID and SpanID into standard logging records.
@@ -26,8 +21,18 @@ class OTelLogFilter(logging.Filter):
             record.otelSpanID = "0" * 16
         return True
 
+# Create a handler and assign filter + formatter globally
+handler = logging.StreamHandler()
+handler.addFilter(OTelLogFilter())
+handler.setFormatter(logging.Formatter(
+    '%(asctime)s [%(levelname)s] [TraceID: %(otelTraceID)s SpanID: %(otelSpanID)s] %(name)s - %(message)s'
+))
+
+root_logger = logging.getLogger()
+root_logger.handlers = [handler]
+root_logger.setLevel(logging.INFO)
+
 logger = logging.getLogger("research-bot")
-logger.addFilter(OTelLogFilter())
 
 import os
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter

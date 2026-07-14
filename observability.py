@@ -65,11 +65,25 @@ else:
     trace.get_tracer_provider().add_span_processor(span_processor)
 
 # 3. Metrics Setup
-# Set a low export interval (e.g., 5 seconds) to demonstrate metrics output in local console logs
-metric_reader = PeriodicExportingMetricReader(
-    ConsoleMetricExporter(),
-    export_interval_millis=5000
-)
+prometheus_enabled = os.getenv("PROMETHEUS_ENABLED", "false").lower() == "true"
+prometheus_port = int(os.getenv("PROMETHEUS_PORT", "8000"))
+
+if prometheus_enabled:
+    from opentelemetry.exporter.prometheus import PrometheusMetricReader
+    from prometheus_client import start_http_server
+    
+    # Start Prometheus scrape client server
+    start_http_server(port=prometheus_port)
+    metric_reader = PrometheusMetricReader()
+    print(f"OpenTelemetry Metrics: Exposing Prometheus scrape endpoint on http://localhost:{prometheus_port}/metrics")
+else:
+    # Set a low export interval (e.g., 5 seconds) to demonstrate metrics output in local console logs
+    metric_reader = PeriodicExportingMetricReader(
+        ConsoleMetricExporter(),
+        export_interval_millis=5000
+    )
+    print("OpenTelemetry Metrics: Exporting metrics to console logs")
+
 metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[metric_reader]))
 meter = metrics.get_meter("research-bot-meter")
 

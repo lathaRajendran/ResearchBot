@@ -1,5 +1,10 @@
 import logging
+from dotenv import load_dotenv
+# Load environment variables at the very beginning of imports
+load_dotenv()
+
 from opentelemetry import trace, metrics
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExporter
 from opentelemetry.sdk.metrics import MeterProvider
@@ -38,8 +43,11 @@ import os
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+# Create standard resource attributes (sets the Service Name in Jaeger UI)
+resource = Resource.create(attributes={"service.name": "research-bot"})
+
 # 2. Tracing Setup
-trace.set_tracer_provider(TracerProvider())
+trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer("research-bot-tracer")
 
 # Load environment variables to check for Jaeger OTLP config
@@ -50,7 +58,6 @@ if jaeger_enabled:
     # Use BatchSpanProcessor and OTLPSpanExporter to send spans to Jaeger OTLP collector
     span_processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint))
     trace.get_tracer_provider().add_span_processor(span_processor)
-    # Log information using standard python logger (this will run before logging filter is loaded, so we get basic log)
     print(f"OpenTelemetry: Sending traces to Jaeger OTLP receiver at {otlp_endpoint}")
 else:
     # Console span exporter for verification
@@ -63,7 +70,7 @@ metric_reader = PeriodicExportingMetricReader(
     ConsoleMetricExporter(),
     export_interval_millis=5000
 )
-metrics.set_meter_provider(MeterProvider(metric_readers=[metric_reader]))
+metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[metric_reader]))
 meter = metrics.get_meter("research-bot-meter")
 
 # Define OTel Metrics

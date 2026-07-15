@@ -139,12 +139,49 @@ The evaluation suite (`eval_runner.py`) uses an independent LLM judge (`gemini-2
    - **Structure**: Does it follow formatting guidelines?
    - **Relevance**: Does it directly address the query?
 3. **Structured Verdicts**: The judge outputs grades (1–5) and a written critique in structured JSON format:
-   ```json
-   {
-     "accuracy_score": 5,
-     "structure_score": 5,
-     "relevance_score": 5,
-     "reasoning": "The response perfectly aligns with the rubric..."
-   }
-   ```
+    ```json
+    {
+      "accuracy_score": 5,
+      "structure_score": 5,
+      "relevance_score": 5,
+      "reasoning": "The response perfectly aligns with the rubric..."
+    }
+    ```
 
+---
+
+## Observability & Debugging Tools Guide
+
+This project supports several observability integrations to help you debug errors, query performance, and trace conversational contexts.
+
+### 1. Jaeger Tracing (Waterfall Diagrams)
+* **What to look for**: Timing bars showing execution flow duration.
+* **How to debug**: If a query is slow, inspect the trace waterfall in `http://localhost:16686` to see if the delay is in Tavily Search or Gemini generation. 
+* Click any span to see arguments like `latest_message` or `generated_query`.
+
+### 2. Prometheus Metrics
+Exposes raw Prometheus metrics at `http://localhost:8000/metrics` (if `PROMETHEUS_ENABLED=true` is set).
+* **Verify scraper**: Go to `http://localhost:9090` (Prometheus UI) $\rightarrow$ **Status** $\rightarrow$ **Targets**. You should see the `research-bot` target marked as **UP**.
+* **Common Queries**:
+  * Total Requests: `research_queries_total`
+  * Total Searches: `web_searches_total`
+  * Average Latency: `rate(query_processing_duration_seconds_sum[5m]) / rate(query_processing_duration_seconds_count[5m])`
+
+### 3. Grafana Dashboards
+Exposes dashboards at `http://localhost:3000` (admin/admin).
+* **Using the Query Inspector (Fixing Empty Charts)**:
+  1. Hover over a panel $\rightarrow$ click the **three dots** in the top-right corner $\rightarrow$ click **Edit**.
+  2. In the query pane (bottom half), click the **Query inspector** tab (top-right of the query pane).
+  3. Click **Refresh**.
+  4. Inspect the **Data** tab to see raw numbers/timestamps sent from Prometheus, or check the **JSON** tab to verify the API response format.
+* **Explore Mode**: Click the main menu (top-left) $\rightarrow$ **Explore** to query metrics on a temporary scratchpad.
+
+### 4. LangSmith (Debugger & LLM Analytics)
+Enables cloud tracking of prompts, token costs, and node trajectories.
+* Add variables to `.env`:
+  ```env
+  LANGCHAIN_TRACING_V2=true
+  LANGCHAIN_API_KEY=your_api_key
+  LANGCHAIN_PROJECT=research-bot
+  ```
+* Go to **[smith.langchain.com](https://smith.langchain.com)** $\rightarrow$ **Projects** $\rightarrow$ **`research-bot`** to inspect execution runs and trace individual prompts.
